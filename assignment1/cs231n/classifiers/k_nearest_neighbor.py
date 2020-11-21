@@ -189,7 +189,7 @@ class KNearestNeighbor(object):
             #########################################################################
             # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
             
-            
+#             print(closest_y.shape)
             y_pred[i] = np.argmax(np.bincount(closest_y))
             pass
 

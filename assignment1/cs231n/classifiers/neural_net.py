@@ -79,7 +79,11 @@ class TwoLayerNet(object):
         # shape (N, C).                                                             #
         #############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
+           
+            
+        hidden_output = np.maximum(0, np.dot(X, W1) + b1)
+        scores = np.dot(hidden_output, W2) + b2
+        
         pass
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -98,6 +102,23 @@ class TwoLayerNet(object):
         #############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
+#         f = scores - np.max(scores, axis = 1, keepdims = True)
+#         loss = -f[range(N), y].sum() + np.log(np.exp(f).sum(axis = 1)).sum()
+#         loss = loss / N + 0.5 * reg * (np.sum(W1 * W1) + np.sum(W2 * W2))
+        
+#         correct_class_score = scores[np.arange(N), y].reshape(N,1)
+#         exp_sum = np.sum(np.exp(scores), axis = 1).reshape(N, 1)
+#         loss = np.sum(np.log(exp_sum) - correct_class_score)
+#         loss /= N
+#         loss += 0.5 * reg * np.sum(W1 * W1) + 0.5 * reg * np.sum(W2 * W2)
+
+        reg_scores = scores - np.max(scores, axis=1).reshape(-1, 1)
+        softmax_output = np.exp(reg_scores) / np.sum(np.exp(reg_scores), axis=1).reshape(-1, 1)
+        loss = -np.sum(np.log(softmax_output[range(N), list(y)]))
+        loss /= N
+        loss += 0.5 * reg * (np.sum(W1 * W1) + np.sum(W2 * W2))
+        
+        
         pass
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -111,6 +132,19 @@ class TwoLayerNet(object):
         #############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
+        dscores = softmax_output.copy()
+        # print(dscores.shape)
+        dscores[range(N), list(y)] -= 1
+        dscores /= N
+        grads['W2'] = np.dot(hidden_output.T, dscores) + reg * W2
+        grads['b2'] = np.sum(dscores, axis=0)
+
+        dhidden_output = np.dot(dscores, W2.T)
+        dRelu = (hidden_output > 0.00001) * dhidden_output
+        grads['W1'] = np.dot(X.T, dRelu) + reg * W1
+        grads['b1'] = np.sum(dRelu, axis=0)
+        
+        
         pass
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -156,6 +190,10 @@ class TwoLayerNet(object):
             #########################################################################
             # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
+            
+            index = np.random.choice(num_train, batch_size, replace=True)
+            X_batch = X[index]
+            y_batch = y[index]  
             pass
 
             # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -172,6 +210,8 @@ class TwoLayerNet(object):
             #########################################################################
             # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
+            for param_name in self.params:
+                self.params[param_name] += -learning_rate * grads[param_name]
             pass
 
             # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -218,6 +258,11 @@ class TwoLayerNet(object):
         ###########################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
+        
+        Relu_output = np.maximum(0, np.dot(X, self.params['W1']) + self.params['b1'])
+        scores = np.dot(Relu_output, self.params['W2']) + self.params['b2']
+        y_pred = np.argmax(scores, axis=1)
+        
         pass
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****

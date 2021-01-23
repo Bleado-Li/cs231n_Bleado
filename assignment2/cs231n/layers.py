@@ -604,7 +604,31 @@ def conv_forward_naive(x, w, b, conv_param):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
+    N, C, H, W = x.shape        # N个样本，C个通道，H的高度，W的宽度
+    F, C, HH, WW = w.shape      # F个过滤器，C个通道，HH的过滤器高度，WW的过滤器宽度
+    stride = conv_param['stride']   # 过滤器每次移动的步长
+    pad = conv_param['pad']         # 图片填充的宽度
+#     print(type(pad))
+    
+    ## 计算卷积结果矩阵的大小并分配全零值占位
+    new_H = 1 + int((H + 2 * pad - HH) / stride)
+    new_W = 1 + int((W + 2 * pad - WW) / stride)
+    out = np.zeros([N, F, new_H, new_W])
+
+    ## 卷积开始
+    for n in range(N):
+        for f in range(F):
+            ## 临时分配(new_H, new_W)大小的全偏移项卷积矩阵，（即提前加上偏移项b[f]）
+            conv_newH_newW = np.ones([new_H, new_W])*b[f]
+            for c in range(C):
+                ## 填充原始矩阵，填充大小为pad，填充值为0
+                pedded_x = np.lib.pad(x[n, c], pad_width=pad, mode='constant', constant_values=0)
+                for i in range(new_H):
+                    for j in range(new_W):
+                        conv_newH_newW[i, j] +=  np.sum(pedded_x[i * stride: i * stride+HH, j * stride: j * stride + WW] * w[f, c,:,:])
+            out[n,f] = conv_newH_newW
     pass
+#     print(pedded_x.shape)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -633,6 +657,32 @@ def conv_backward_naive(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
+    # 数据准备
+    x, w, b, conv_param = cache
+    pad = conv_param['pad']
+    stride = conv_param['stride']
+    F, C, HH, WW = w.shape
+    N, C, H, W = x.shape
+    N, F, new_H, new_W = dout.shape
+
+    # 下面，我们模拟卷积，首先填充x。
+    padded_x = np.lib.pad(x,
+                          ((0, 0), (0, 0), (pad, pad), (pad, pad)),
+                          mode='constant',
+                          constant_values=0)
+    padded_dx = np.zeros_like(padded_x)  # 填充了的dx，后面去填充即可得到dx
+    dw = np.zeros_like(w)
+    db = np.zeros_like(b)
+
+    for n in range(N):  # 第n个图像
+        for f in range(F):  # 第f个过滤器
+            for i in range(new_H):
+                for j in range(new_W):
+                    db[f] += dout[n, f, i, j] # dg对db求导为1*dout
+                    dw[f] += padded_x[n, :, i*stride : HH + i*stride, j*stride : WW + j*stride] * dout[n, f, i, j]
+                    padded_dx[n, :, i*stride : HH + i*stride, j*stride : WW + j*stride] += w[f] * dout[n, f, i, j]
+    # 去掉填充部分
+    dx = padded_dx[:, :, pad:pad + H, pad:pad + W]
     pass
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -667,6 +717,19 @@ def max_pool_forward_naive(x, pool_param):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
+    N, C, H, W = x.shape
+    pool_height = pool_param['pool_height'] # 池化过滤器高度
+    pool_width  = pool_param['pool_width']  # 池化过滤器宽度
+    pool_stride = pool_param['stride']      # 移动步长
+    new_H = 1 + int((H - pool_height) / pool_stride)    # 池化结果矩阵高度
+    new_W = 1 + int((W - pool_width) / pool_stride)     # 池化结果矩阵宽度
+
+    out = np.zeros([N, C, new_H, new_W])
+    for n in range(N):
+        for c in range(C):
+            for i in range(new_H):
+                for j in range(new_W):
+                    out[n,c,i,j] = np.max(x[n, c, i*pool_stride : i*pool_stride+pool_height, j*pool_stride : j*pool_stride+pool_width])
     pass
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -694,7 +757,26 @@ def max_pool_backward_naive(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
+     # 数据准备
+    x, pool_param = cache
+    N, C, H, W = x.shape
+    pool_height = pool_param['pool_height']
+    pool_width  = pool_param['pool_width']
+    pool_stride = pool_param['stride']
+    new_H = 1 + int((H - pool_height) / pool_stride)
+    new_W = 1 + int((W - pool_width) / pool_stride)
+    dx = np.zeros_like(x)
+    for n in range(N):
+        for c in range(C):
+            for i in range(new_H):
+                for j in range(new_W):
+                    window = x[n, c, i * pool_stride: i * pool_stride + pool_height,j * pool_stride: j * pool_stride + pool_width]
+                    dx[n, c, i * pool_stride: i * pool_stride + pool_height, j * pool_stride: j * pool_stride + pool_width] = (window == np.max(window))*dout[n,c,i,j]
+
     pass
+#     print("x shape",x.shape)
+#     print("dx shape",dx.shape)
+#     print(dx[0,0])
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -736,6 +818,10 @@ def spatial_batchnorm_forward(x, gamma, beta, bn_param):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
+    N, C, H, W = x.shape
+    x_new = x.transpose(0, 2, 3, 1).reshape(N*H*W, C)
+    out, cache = batchnorm_forward(x_new, gamma, beta, bn_param)
+    out = out.reshape(N, H, W, C).transpose(0, 3, 1, 2)
     pass
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -770,6 +856,10 @@ def spatial_batchnorm_backward(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
+    N, C, H, W = dout.shape
+    dout_new = dout.transpose(0, 2, 3, 1).reshape(N*H*W, C)
+    dx, dgamma, dbeta = batchnorm_backward(dout_new, cache)
+    dx = dx.reshape(N, H, W, C).transpose(0, 3, 1, 2)
     pass
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -810,6 +900,15 @@ def spatial_groupnorm_forward(x, gamma, beta, G, gn_param):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
+    x_group = np.reshape(x, (x.shape[0] * G, -1))
+    mu = np.mean(x_group, axis=1, keepdims=True)
+    var = np.var(x_group, axis=1, keepdims=True)
+    var_inv = 1 / np.sqrt(var + eps)
+    x_mu = x_group - mu
+    x_norm = x_mu * var_inv
+    x_norm = np.reshape(x_norm, x.shape)
+    out = gamma * x_norm + beta
+    cache = (gamma, x_norm, x_mu, var_inv)
     pass
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -840,6 +939,19 @@ def spatial_groupnorm_backward(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
+    gamma, x_norm, x_mu, var_inv = cache
+    dgamma = np.sum(dout * x_norm, axis=(0, 2, 3))[None, ..., None, None]
+    dxnorm = dout * gamma
+    dbeta = np.sum(dout, axis=(0, 2, 3))[None, ..., None, None]
+    dx_norm = np.reshape(dxnorm, x_mu.shape)
+    dxmu = dx_norm * var_inv
+    dvar_inv = np.sum(dx_norm * x_mu, axis=1, keepdims=True)
+    dvar = -0.5 * dvar_inv * var_inv ** 3
+    dx = dxmu
+    dxmu += dvar * 2 / (x_mu.shape[1]) * x_mu
+    dmu = -1 * np.sum(dxmu, axis=1, keepdims=True)
+    dx += 1 / (x_mu.shape[1]) * dmu
+    dx = np.reshape(dx, dout.shape)
     pass
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****

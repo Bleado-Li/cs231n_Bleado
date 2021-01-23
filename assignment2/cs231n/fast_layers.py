@@ -18,6 +18,7 @@ def conv_forward_im2col(x, w, b, conv_param):
     A fast implementation of the forward pass for a convolutional layer
     based on im2col and col2im.
     """
+#     print("conv_forward_im2col")
     N, C, H, W = x.shape
     num_filters, _, filter_height, filter_width = w.shape
     stride, pad = conv_param["stride"], conv_param["pad"]
